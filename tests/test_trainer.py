@@ -1,3 +1,4 @@
+from gc import collect
 from unittest import TestCase
 
 import evaluate
@@ -367,6 +368,17 @@ class TrainerHyperParameterOptunaIntegrationTest(TestCase):
         def hp_name(trial):
             return MyTrialShortNamer.shortname(trial.params)
 
+        import optuna
+        import gc
+        class OptunaCallbackCheckNumberOfModelInstances:
+            def __init__(self, threshold: int):
+                self.results = []
+
+            def __call__(self, study: optuna.study.Study, trial: optuna.trial.FrozenTrial) -> None:
+                collected_models = [obj for obj in gc.get_objects() if isinstance(obj, SetFitModel)]
+                self.results.append(collected_models)
+                print(f"gc SetFitModel instances: {len(collected_models)}")
+
         trainer = SetFitTrainer(
             train_dataset=self.dataset,
             eval_dataset=self.dataset,
@@ -374,7 +386,7 @@ class TrainerHyperParameterOptunaIntegrationTest(TestCase):
             model_init=model_init,
             column_mapping={"text_new": "text", "label_new": "label"},
         )
-        result = trainer.hyperparameter_search(direction="minimize", hp_space=hp_space, hp_name=hp_name, n_trials=4)
+        result = trainer.hyperparameter_search(direction="minimize", hp_space=hp_space, hp_name=hp_name, n_trials=20)
         assert isinstance(result, BestRun)
         assert result.hyperparameters.keys() == {"learning_rate", "batch_size", "max_iter", "solver"}
 

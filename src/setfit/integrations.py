@@ -19,6 +19,8 @@ def default_hp_search_backend():
 
 def run_hp_search_optuna(trainer: "SetFitTrainer", n_trials: int, direction: str, **kwargs) -> BestRun:
     import optuna
+    from .modeling import SetFitModel
+    import gc
 
     # Heavily inspired by transformers.integrations.run_hp_search_optuna
     # https://github.com/huggingface/transformers/blob/cbb8a37929c3860210f95c9ec99b8b84b8cf57a1/src/transformers/integrations.py#L160
@@ -31,9 +33,13 @@ def run_hp_search_optuna(trainer: "SetFitTrainer", n_trials: int, direction: str
             trainer.objective = trainer.compute_objective(metrics)
         return trainer.objective
 
+    def OptunaCallbackCheckNumberOfModelInstances(study: optuna.study.Study, trial: optuna.trial.FrozenTrial) -> None:
+        collected_models = [obj for obj in gc.get_objects() if isinstance(obj, SetFitModel)]
+        print(f"gc SetFitModel instances: {len(collected_models)}")
+
     timeout = kwargs.pop("timeout", None)
     n_jobs = kwargs.pop("n_jobs", 1)
     study = optuna.create_study(direction=direction, **kwargs)
-    study.optimize(_objective, n_trials=n_trials, timeout=timeout, n_jobs=n_jobs)
+    study.optimize(_objective, n_trials=n_trials, timeout=timeout, n_jobs=n_jobs, callbacks=[OptunaCallbackCheckNumberOfModelInstances])
     best_trial = study.best_trial
     return BestRun(str(best_trial.number), best_trial.value, best_trial.params, study)
